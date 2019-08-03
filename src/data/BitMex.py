@@ -1,29 +1,31 @@
-from datetime import date
-import pandas as pd
+from datetime import timedelta
 from datetime import datetime
+import requests
 
 BASE_URL = 'https://s3-eu-west-1.amazonaws.com/public.bitmex.com/data/trade/'
 FORMAT = '.csv.gz'
+FILE_PATH = "./data/"
 
+class BitMex:
 
-def get_trades(dt=date.today(), symbol=''):
-    if type(dt) is str:
-        dt_str = dt
-    else:
-        dt_str = dt.strftime("%Y%m%d")
+    @staticmethod
+    def get_trades(start_date=datetime.now() - timedelta(days=2), end_date=datetime.now() - timedelta(days=1),
+                   verbose=False, file_path=FILE_PATH):
+        while start_date <= end_date:
+            date_str = start_date.strftime("%Y%m%d")
+            file_name = date_str + FORMAT
+            url = BASE_URL + file_name
 
-    url = BASE_URL + dt_str + FORMAT
+            if verbose:
+                print("Downloading and saving data ->" + date_str)
 
-    # Read trades to pandas dataframe
-    trades = pd.read_csv(url, compression='gzip', header=0, sep=',', quotechar='"')
+            res = requests.get(url, stream=True)
 
-    # Parse timestamp
-    trades.timestamp = trades.timestamp.map(lambda t: datetime.strptime(t[:-3], "%Y-%m-%dD%H:%M:%S.%f"))
+            if res.status_code == 200:
+                with open(file_path + file_name, 'wb') as f:
+                    f.write(res.raw.read())
 
-    # Filter by symbol if required
-    if symbol != '':
-        trades = trades[trades.symbol == symbol]
+            start_date = start_date + timedelta(days=1)
 
-    trades = trades.set_index('timestamp')
-
-    return trades
+        if verbose:
+            print("Finished saving BitMex trade files")
