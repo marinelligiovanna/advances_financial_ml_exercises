@@ -6,11 +6,14 @@ from abc import abstractmethod
 class Bars:
 
     def __init__(self):
-        self.columns = ['timestamp', 'open', 'high', 'low', ' close', 'volume']
+        self.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
         self.bars = pd.DataFrame(columns=self.columns)
+        self.bar = {}
+        self.is_first_bar = True
 
     def process_trades(self, start_date=datetime.now() - timedelta(days=1), end_date=datetime.now() - timedelta(days=1),
-                       chunksize=10 ** 6, file_dir="./data/", file_format=".csv.gz", compression=None, verbose=False):
+                       symbol=None, chunksize=10 ** 6, file_dir="../data/", file_format=".csv.gz", compression="gzip",
+                       verbose=False):
 
         while start_date <= end_date:
             date_str = start_date.strftime("%Y%m%d")
@@ -25,6 +28,8 @@ class Bars:
                     print('Processing chunk ' + str(chunk_num))
 
                 chunk['timestamp'] = chunk['timestamp'].map(lambda t: datetime.strptime(t[:-3], '%Y-%m-%dD%H:%M:%S.%f'))
+                chunk = chunk[chunk['symbol'] == symbol]
+
                 self.process_chunk(chunk)
 
                 chunk_num = chunk_num + 1
@@ -37,10 +42,10 @@ class Bars:
     def process_chunk(self, chunk):
         pass
 
-    def add_bar(self, bar):
-        self.bars.add(bar)
+    def add_bar(self):
+        self.bars = self.bars.append(self.bar, ignore_index=True)
 
-    def new_bar(self, row):
+    def create_new_bar(self, row):
         bar = {}
         price = row['price']
 
@@ -51,32 +56,15 @@ class Bars:
         bar['close'] = price
         bar['volume'] = row['size']
 
-        return bar
+        self.bar = bar
+
+    def set_bar_values(self, row):
+        price = row['price']
+        self.bar['timestamp'] = row['timestamp']
+        self.bar['high'] = price if price > self.bar['high'] else self.bar['high']
+        self.bar['low'] = price if price < self.bar['low'] else self.bar['low']
+        self.bar['close'] = price
+        self.bar['volume'] = self.bar['volume'] + row['size']
 
     def get_bars(self):
         return self.bars
-        # def time_bars(trades, type='close', interval='15'):
-        #
-        #     freq = str(interval) + 'Min'
-        #     group = trades.groupby(pd.Grouper(freq=freq))
-        #
-        #     # Calculate open, high, low and close bars
-        #     if type == 'open':
-        #         return group.first()
-        #     elif type == 'close':
-        #         return group.tail(1)
-        #     elif type == 'high':
-        #         return group.max()
-        #     elif type == 'low':
-        #         return group.min()
-        #
-        #     return trades
-        #
-        # def tick_bars(trades, type='close', ticks_per_bar = 500):
-        #
-        #     # Create a row_number column and a group by key according
-        #     # the number of ticks per bar required
-        #     df = trades.reset_index()
-        #     df['row_number'] = np.arange(len(df))
-        #     df['key'] = np.floor(df['row_number']/ticks_per_bar)
-        #
